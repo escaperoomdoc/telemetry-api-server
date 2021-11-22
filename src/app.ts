@@ -13,6 +13,11 @@ import cors from 'cors';
 import http from 'http';
 import md5 from 'md5';
 
+export function now(): string {
+	let dt: Date = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
+	return dt.toISOString();
+}
+
 import redis, { RedisClient } from "redis";
 const redisClient = redis.createClient({host: process.env.REDIS_URL, port: parseInt(process.env.REDIS_PORT as string)});
 const redisSelect = promisify(redisClient.select).bind(redisClient);
@@ -59,6 +64,7 @@ export class ApiServer {
 	}
 	public async redisUpdate() {
 		try {
+			console.log(`${now()}: updating redis...`);
 			this.redisUpdating = true;
 			let result: any = [];
 			await redisSelect(2);
@@ -66,7 +72,7 @@ export class ApiServer {
 			for (let key of keys) {
 				let value = await redisGet(key)
 				result.push(value)
-				console.log(value);
+				console.log(`${now()}: value[${key}]=${value}`);
 				await sleep(50)
 			}
 			this.result = result;
