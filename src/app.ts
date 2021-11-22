@@ -1,4 +1,4 @@
-import {exit} from 'process';
+import {env, exit} from 'process';
 import {promisify} from "util";
 import dotenv from 'dotenv';
 import * as fs from "fs";
@@ -13,46 +13,75 @@ import cors from 'cors';
 import http from 'http';
 import md5 from 'md5';
 
+import redis, { RedisClient } from "redis";
+const redisClient = redis.createClient({host: process.env.REDIS_URL, port: parseInt(process.env.REDIS_PORT as string)});
+const redisSelect = promisify(redisClient.select).bind(redisClient);
+const redisFlushall = promisify(redisClient.flushall).bind(redisClient);
+const redisFlushdb = promisify(redisClient.flushdb).bind(redisClient);
+const redisPing = promisify(redisClient.ping).bind(redisClient);
+const redisKeys = promisify(redisClient.keys).bind(redisClient);
+const redisGet = promisify(redisClient.get).bind(redisClient);
+const redisSet = promisify(redisClient.set).bind(redisClient);
+const redisDel = promisify(redisClient.del).bind(redisClient);
+const redisExpire = promisify(redisClient.expire).bind(redisClient);
+
 export class ApiServer {
-	ready: boolean;
+	redisUpdating: boolean;
 	app: Application;
 	http: http.Server;
-	cfg: any;
-	map: any;
+	result: any;
 	constructor(cfg?: any) {
-		this.ready = false;
-		if (cfg) this.cfg = cfg;
-		else this.cfg = {
-			httpPort: 88,
-			prtFilename: '2018.01.22-00.00.00.sps'
-		}
+		this.redisUpdating = false;
+		this.result = null;
 		this.app = express();
 		this.http = http.createServer(this.app);
-		this.app.use(express.json());
-		this.app.use(cors());
-		this.app.use(express.static('tests/public'));
-		this.setApiHandlers();
-		this.http.listen(this.cfg.httpPort, () => {
-			console.log(`field-model-converter started on ${this.cfg.httpPort}...`);
-		});
-		this.http.on('error', (e: any) => {
-			if (e.code === 'EADDRINUSE') {
-				console.log(`cannot start field-model-converter on ${this.cfg.httpPort}...`);
-				process.exit(1);
-			}
-		})
 	}
 	public async start() {
 		try {
-			this.ready = true;
+			this.app.use(express.json());
+			this.app.use(cors());
+			//this.app.use(express.static('public'));
+			this.setApiHandlers();
+			this.http.listen(env.HTTP_PORT, () => {
+				console.log(`telemetry-api-server started on ${env.HTTP_PORT}...`);
+			});
+			this.http.on('error', (e: any) => {
+				if (e.code === 'EADDRINUSE') {
+					console.log(`cannot start telemetry-api-server on ${env.HTTP_PORT}...`);
+					process.exit(1);
+				}
+			})
 		}
-   	catch(error) {
-			console.log(`Api.start() error: ${error}`);
+		catch(error) {
+			console.log(`ApiServer.constructor() error: ${error}`);
+			process.exit(1);
 		}
+	}
+	public async redisUpdate() {
+		try {
+			this.redisUpdating = true;
+			let result: any = [];
+			await redisSelect(2);
+			let keys = await redisKeys('*');
+			for (let key of keys) {
+				let value = await redisGet(key)
+				result.push(value)
+				console.log(value);
+				await sleep(50)
+			}
+			this.result = result;
+		}
+		catch(error) {
+			console.log(`ApiServer.redisUpdate() error: ${error}`);
+		}
+		this.redisUpdating = false;
+		setTimeout(async() => {
+			await this.redisUpdate();
+		}, 5000)
 	}
 	private setApiHandlers() {
 		this.app.get('/api/*', (req: Request, res: Response, next: NextFunction) => {
-			if (!this.ready) return res.status(400).json({
+			if (!this.result) return res.status(400).json({
 				error: 'data not ready'
 			});
 			return next();
@@ -60,7 +89,7 @@ export class ApiServer {
 		this.app.get('/api/v1/get_gis_data', (req: Request, res: Response, next: NextFunction) => {
 			return res.status(200).send({
 				method: '/api/v1/get_gis_data',
-				payload: true
+				payload: this.result
 			});
 		});
 		this.app.get('/api/version', (req: Request, res: Response, next: NextFunction) => {
@@ -71,9 +100,10 @@ export class ApiServer {
 					version: '1'
 				}
 			});
-		});		
+		});
 	}
 }
 
-let api = new ApiServer(config);
+let api = new ApiServer();
 api.start();
+api.redisUpdate();
