@@ -67,11 +67,11 @@ export class ApiServer {
 			console.log(`${now()}: updating redis...`);
 			this.redisUpdating = true;
 			let result: any = [];
-			await redisSelect(2);
+			await redisSelect(1);
 			let keys = await redisKeys('*');
 			for (let key of keys) {
 				let value = await redisGet(key)
-				result.push(value)
+				result.push(JSON.parse(value as string))
 				console.log(`${now()}: value[${key}]=${value}`);
 				await sleep(50)
 			}
