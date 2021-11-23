@@ -10,7 +10,7 @@ npm install -g typescript
 git clone https://github.com/escaperoomdoc/telemetry-api-server
 
 ## setup config
-copy target.env to .env
+copy target.env .env
 
 ## goto telemetry-api-server folder, install dependenices and build project
 npm install
