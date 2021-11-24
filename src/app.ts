@@ -19,7 +19,8 @@ export function now(): string {
 }
 
 import redis, { RedisClient } from "redis";
-const redisClient = redis.createClient({host: process.env.REDIS_URL, port: parseInt(process.env.REDIS_PORT as string)});
+const redisClient = redis.createClient({host: process.env.REDIS_URL, port: parseInt(process.env.REDIS_PORT as string), no_ready_check: true,auth_pass:process.env.REDIS_AUTH, db:"1"});
+const redisAuth = promisify(redisClient.auth).bind(redisClient);
 const redisSelect = promisify(redisClient.select).bind(redisClient);
 const redisFlushall = promisify(redisClient.flushall).bind(redisClient);
 const redisFlushdb = promisify(redisClient.flushdb).bind(redisClient);
@@ -67,7 +68,8 @@ export class ApiServer {
 			console.log(`${now()}: updating redis...`);
 			this.redisUpdating = true;
 			let result: any = [];
-			await redisSelect(1);
+			//await redisAuth(process.env.REDIS_AUTH as string);
+			//await redisSelect(1);
 			let keys = await redisKeys('*');
 			for (let key of keys) {
 				let value = await redisGet(key)
